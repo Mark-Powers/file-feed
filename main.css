@@ -30,15 +30,16 @@ span.path {
     display: block;
     color: #aaa;
 }
-span span.btn {
+span.btn {
     background-color: #aaa;
     color: #fff;
     padding: 3px;
     margin-left: 3em;
 }
-span span.btn:hover {
+span.btn:hover {
     background-color: #888;
     color: #fff;
     padding: 3px;
     margin-left: 3em;
+    cursor: pointer
 }

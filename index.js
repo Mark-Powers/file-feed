@@ -3,17 +3,21 @@
 const exec = require('child_process').exec;
 const express = require('express');
 const fs = require('fs')
+const templates = require('./templates.js');
+const bodyParser = require("body-parser");
 
 const maxFiles = 50;
 const port = 8000
-const rootPath = ""
-const type = "written"
+const rootPath = "/home/mark/Music"
+const type = "audio"
 const filters = {
-    "audio": ["flac", "ogg", "mp3", "aac", "midi", "mid", "opus", "wav"],
+    "audio": ["flac", "ogg", "mp3", "aac", "midi", "mid", "opus", "wav", "m4a", "m3u"],
     "written": ["txt", "pdf", "html", "epub", "doc", "docx"]
 }
 
 const server = express();
+
+server.use(bodyParser.urlencoded({ extended: false }));
 
 server.use((req, res, next) => {
     console.debug(new Date(), req.ip, req.method, req.originalUrl);
@@ -34,65 +38,45 @@ function shuffle(a) {
     return a;
 }
 
-var theFiles
-server.get('/', async (req, res, next) => {
-    theFiles = []
-    listFiles = function(path){
-        files = fs.readdirSync(path)
-        files.forEach((file) => {
-            let stat = fs.statSync(`${path}/${file}`)
-            if(stat.isDirectory()){
-                listFiles(`${path}/${file}`)
-            } else {
-                let idx = file.lastIndexOf(".")
-                if(idx == -1){
-                    return
-                }
-                let ext = file.substring(idx+1)
-                console.log(ext)
-                if(filters[type].includes(ext)){
-                    theFiles.push({
-                        path: path,
-                        name: file,
-                        created: String(stat.birthtime).substring(0, 24),
-                        accessed: String(stat.atime).substring(0, 24),
-                    })
-                }
-                
+function loadTheFilesAndExtensions(path){
+    files = fs.readdirSync(path)
+    files.forEach((file) => {
+        let stat = fs.statSync(`${path}/${file}`)
+        if(stat.isDirectory()){
+            loadTheFilesAndExtensions(`${path}/${file}`)
+        } else {
+            let idx = file.lastIndexOf(".")
+            if(idx == -1){
+                return
             }
-        }) 
-    }
-    listFiles(rootPath)
+            let ext = file.substring(idx+1)
+            if(!extentions.includes(ext)){
+                extentions.push(ext)
+            }
+            if(type != "all" && filters[type].includes(ext)){
+                theFiles.push({
+                    path: path,
+                    name: file,
+                    created: String(stat.birthtime).substring(0, 24),
+                    accessed: String(stat.atime).substring(0, 24),
+                })
+            }
+            
+        }
+    }) 
+}
+
+var theFiles
+var extentions
+server.get('/', async (req, res, next) => {
+    extentions = []
+    theFiles = []
+    loadTheFilesAndExtensions(rootPath)
     shuffle(theFiles)
+    
     theFiles = theFiles.slice(0, maxFiles)
     var html = []
-    html.push(`<!doctype html>
-    <html lang="en">
-    <head>
-        <title>Files</title>
-        <link rel="stylesheet" type="text/css" href="/main.css">
-        <script>
-            function fetchOpen(index){
-                fetch("/open/"+index)
-                    .then(response => console.log("ok"))
-                    .catch((error) => {
-                        console.error('Error:', error);
-                      });                      
-            }
-            function fetchOpenDir(index){
-                event.stopPropagation();
-                console.log("test")
-                fetch("/openDir/"+index)
-                    .then(response => console.log("ok"))
-                    .catch((error) => {
-                        console.error('Error:', error);
-                      });  
-            }
-        </script>
-    </head>
-    <body>
-    <h1>Check out these files!</h1>
-    <ul>`)
+    html.push(templates["/"]["pre"])
     theFiles.forEach((file, index) => {
         html.push(`<li onclick="fetchOpen(${index})">`)
         html.push(`<span class="name" >${file.name}</span>`)
@@ -101,17 +85,31 @@ server.get('/', async (req, res, next) => {
         html.push(`<span class="date" >Accessed: ${file.accessed}</span>`)
         html.push(`</li>`)
     })
-    html.push(`</ul>
-    </body>
-    </html>`)
+    html.push(templates["/"]["post"])
     res.status(200).send(html.join(""))
+})
+
+server.get("/config", async (req, res, next) => {
+    var html = []
+    html.push(templates["/config"]["pre"])
+    html.push(`<div><span>Path</span><input id="inputPath" type="text" value="${rootPath}"></div>`)
+    html.push(`<div><span>Max Files</span><input id="inputMax" type="number" value="${maxFiles}"></div>`)
+    html.push(`<div><span>File Filter</span><input id="inputType" type="text" value="${type}"></div>`)
+    html.push(`<div><span class="btn" onclick="postConfig()">Save</span></div>`)
+    html.push(templates["/config"]["post"])
+    res.status(200).send(html.join(""))
+}) 
+
+server.post("/config", async (req, res, next) => {
+    console.log(req.headers)
+    console.log(req.body)
+    res.status(200).send("")
 })
 
 server.get("/open/:index", (req, res, next)=>{
     let index = Number(req.params.index)
     let f = theFiles[index]
     exec(`xdg-open "${f.path}/${f.name}"`)
-
     res.status(200).send("");
 })
 
